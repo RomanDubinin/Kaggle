@@ -9,6 +9,10 @@ from sklearn.metrics import r2_score, make_scorer, mean_squared_error, mean_abso
 from sklearn.model_selection import cross_val_score
 from sklearn.cross_validation import train_test_split
 from sklearn.model_selection import GridSearchCV
+from sklearn.preprocessing import normalize
+
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 import matplotlib.pyplot as plt
 
@@ -19,10 +23,24 @@ def factorize(df):
             df[column] = df[column].factorize()[0]
 
 data = pd.read_csv('train.csv', index_col='id')
-sub_data = data[:1000]
 
 x_data = data.drop("loss", axis=1)
 y_data = data["loss"]
+
+contFeatureslist = []
+for colName,x in x_data.iloc[1,:].iteritems():
+    if(not str(x).isalpha()):
+        contFeatureslist.append(colName)
+
+plt.figure(figsize=(13,9))
+sns.boxplot(x_data[contFeatureslist])
+plt.show()
+
+for feature in contFeatureslist:
+    x_data[feature] = (x_data[feature] - np.mean(x_data[feature])) / (max(x_data[feature]) - min(x_data[feature])) 
+
+x_data[contFeatureslist] = normalize(x_data[contFeatureslist], axis=0)
+
 factorize(x_data) # Сомнительное место, попробуй факторизовать по-другому
 
 x_train, x_test, y_train, y_test = train_test_split(x_data, y_data, test_size=0.4, random_state=241)
@@ -38,11 +56,11 @@ grid = {'learning_rate': [0.6,0.7,0.8,0.9,1],
         'n_estimators': [100, 500]}
 clf = GradientBoostingRegressor(verbose=True)
 gs = GridSearchCV(clf, grid, scoring='neg_mean_squared_error', cv=3, verbose=True)
-gs.fit(x_data, y_data)
+gs.fit(x_data[:1000], y_data[:1000])
 
 res = gs.cv_results_
 df = pd.DataFrame.from_dict(res)
-df.to_csv('gs_gbr_full_test.csv')
+df.to_csv('gs_gbr_wit_norm.csv')
 
 ###
 # plt.figure()
@@ -100,17 +118,25 @@ test = pd.read_csv('test.csv')
 x_test = test.drop("id", axis=1)
 factorize(x_test) # Сомнительное место, попробуй факторизовать по-другому
 
+
+# for feature in contFeatureslist:
+#     x_test[feature] = (x_test[feature] - np.mean(x_test[feature])) / (max(x_test[feature]) - min(x_test[feature])) 
+
+x_test[contFeatureslist] = normalize(x_test[contFeatureslist], axis=0)
+
+# with normalize: {'subsample': 1, 'max_features': 'auto', 'learning_rate': 0.6, 'n_estimators': 500} 
+# 1" on full data : {'learning_rate': 0.6, 'n_estimators': 100, 'subsample': 1, 'max_features': 'auto'}
 # 1: {'n_estimators': 500, 'max_features': 'log2', 'learning_rate': 0.6, 'subsample': 0.9}
 # 90: {'n_estimators': 500, 'max_features': 'auto', 'learning_rate': 1, 'subsample': 0.8}
 
 gbr = GradientBoostingRegressor(random_state=1, 
     n_estimators=500, 
     verbose=True, 
-    learning_rate=1,
+    learning_rate=0.6,
     max_features='auto',
-    subsample=0.8)
+    subsample=1)
 gbr.fit(x_data, y_data)
 y_gbr = gbr.predict(x_test)
 
 submission = pd.DataFrame({'loss': y_gbr}, index=test["id"])
-submission.to_csv('submission_gbr.csv')
+submission.to_csv('submission_gbr_norm_0.csv')
